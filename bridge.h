@@ -6,10 +6,13 @@
 #include <pico/printf.h>
 #include <hardware/gpio.h>
 #include <pico/stdlib.h>
+#include "hardware/irq.h"
+#include "comms.h"
 
-void sync_rotation();
-void bridge_init();
-void manual_step();
+typedef struct
+{
+    uint pwm_l, pwm_h, pwm_r, dir;
+}rt_data;
 
 /*
  * sterowanie po lewej
@@ -20,23 +23,24 @@ void manual_step();
  * sensory 16, 17, 18 (od dolu od prawej)
  */
 
-#define A_L (1<<0)
-#define A_H (1<<1)
-#define B_L (1<<2)
-#define B_H (1<<3)
-#define C_L (1<<4)
-#define C_H (1<<5)
-
 #define PH_A 0
 #define PH_B 1
 #define PH_C 2
 
-#define S0 (A_L | B_H)
-#define S1 (A_L | C_H)
-#define S2 (B_L | C_H)
-#define S3 (B_L | A_H)
-#define S4 (C_L | A_H)
-#define S5 (C_L | B_H)
+
+#define A_L 0
+#define A_H 1
+#define B_L 2
+#define B_H 3
+#define C_L 4
+#define C_H 5
+
+#define CTAB_AH { 0, 0, 0, 1, 1, 0 }
+#define CTAB_AL { 1, 1, 0, 0, 0, 0 }
+#define CTAB_BH { 1, 0, 0, 0, 0, 1 }
+#define CTAB_BL { 0, 0, 1, 1, 0, 0 }
+#define CTAB_CH { 0, 1, 1, 0, 0, 0 }
+#define CTAB_CL { 0, 0, 0, 0, 1, 1 }
 
 #define H1 (1<<16) //red
 #define H2 (1<<17) //green
@@ -44,21 +48,26 @@ void manual_step();
 
 #define H_ALL H1|H2|H3
 
-#define HCTAB {       S2,       S3,     0,     S4,       S1,     0,    S0,         S5} //shift +1
-#define HCTAB_R { B_L | C_H, B_L | A_H, 0, C_L | A_H, A_L | C_H, 0, A_L | B_H, C_L | B_H} //shift +1
-#define HCTAB_AL {    0,          0,    0,     0,         1,     0,     1,          0}
-#define HCTAB_AH {    0,          1,    0,     1,         0,     0,     0,          0}
-#define HCTAB_BL {    1,          1,    0,     0,         0,     0,     0,          0}
-#define HCTAB_BH {    0,          0,    0,     0,         0,     0,     1,          1}
-#define HCTAB_CL {    0,          0,    0,     1,         0,     0,     0,          1}
-#define HCTAB_CH {    1,          0,    0,     0,         1,     0,     0,          0}
-#define CTAB_AL { 0, 0, 0, 1, 1, 0 }
-#define CTAB_AH { 1, 1, 0, 0, 0, 0 }
-#define CTAB_BL { 1, 0, 0, 0, 0, 1 }
-#define CTAB_BH { 0, 0, 1, 1, 0, 0 }
-#define CTAB_CL { 0, 1, 1, 0, 0, 0 }
-#define CTAB_CH { 0, 0, 0, 0, 1, 1 }
+// 0-1-3-7-6-4
+#define TRTAB { 3, 4, 254, 5, 2, 254, 1, 0} //base hall->corresponding commutation
 
-// 0-2-3-7-5-4
+#define DEAD_TIME 10
+
+#define FWD 1
+
+#define PWM_MAX 60000
+
+int sync_rotation();
+void bridge_init();
+int manual_step();
+void set_pwm_all( uint16_t pwm_l, uint16_t pwm_h);
+void send_reg_16( int name, uint16_t reg);
+void rx_data( int rx[], int advance );
+int parse_wreg( uint* run, rt_data* data, int rx[] );
+void set_out_state( int step, uint16_t pwm_l, uint16_t pwm_h );
+void rotate_stupid( rt_data* rundata, int state);
+void step( rt_data* rundata );
+void hall_irq( uint gpio, uint32_t events );
+int irq_work();
 
 #endif //INVERTER_BRIDGE_H
