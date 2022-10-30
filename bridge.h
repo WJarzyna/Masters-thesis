@@ -11,7 +11,8 @@
 
 typedef struct
 {
-    uint pwm_l, pwm_h, pwm_r, dir;
+    uint16_t pwm_l, pwm_h, pwm_r, dir;
+    uint32_t dt;
 }rt_data;
 
 /*
@@ -42,11 +43,11 @@ typedef struct
 #define CTAB_CH { 0, 1, 1, 0, 0, 0 }
 #define CTAB_CL { 0, 0, 0, 0, 1, 1 }
 
-#define H1 (1<<16) //red
-#define H2 (1<<17) //green
-#define H3 (1<<18) //violet
+#define H1 16 //red
+#define H2 17 //green
+#define H3 18 //violet
 
-#define H_ALL H1|H2|H3
+#define H_ALL (1<<H1)|(1<<H2)|(1<<H3)
 
 // 0-1-3-7-6-4
 #define TRTAB { 3, 4, 254, 5, 2, 254, 1, 0} //base hall->corresponding commutation
@@ -63,11 +64,12 @@ int manual_step();
 void set_pwm_all( uint16_t pwm_l, uint16_t pwm_h);
 void send_reg_16( int name, uint16_t reg);
 void rx_data( int rx[], int advance );
-int parse_wreg( uint* run, rt_data* data, int rx[] );
+int parse_wreg( int* run, volatile rt_data* data, const int rx[] );
 void set_out_state( int step, uint16_t pwm_l, uint16_t pwm_h );
-void rotate_stupid( rt_data* rundata, int state);
-void step( rt_data* rundata );
+void rotate_stupid( volatile rt_data* rundata, int state);
+void step( volatile rt_data* rundata );
 void hall_irq( uint gpio, uint32_t events );
 int irq_work();
+void zero_rundata( volatile rt_data* rundata);
 
 #endif //INVERTER_BRIDGE_H
