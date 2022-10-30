@@ -11,8 +11,7 @@
 
 typedef struct
 {
-    uint16_t pwm_l, pwm_h, pwm_r, dir;
-    uint32_t dt;
+    uint16_t pwm_l, pwm_h, pwm_r, dir, speed;
 }rt_data;
 
 /*

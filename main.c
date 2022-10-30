@@ -23,8 +23,5 @@ void init()
     gpio_set_dir(LED, GPIO_OUT);
     gpio_put(LED, 1);
 
-    gpio_init_mask(  H_ALL );
-    gpio_set_dir_in_masked( H_ALL );
-
     bridge_init();
 }

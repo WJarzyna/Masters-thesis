@@ -21,7 +21,7 @@ void hall_irq( uint gpio, uint32_t events )
 
     if( step == 0 )
     {
-        rundata.dt = time_us_32() - t;
+        rundata.speed = (uint32_t)1e7/(time_us_32() - t);
         t = time_us_32();
     }
 
@@ -33,18 +33,16 @@ int irq_work()
     int run = 1;
     int rx[MAX_RX_LEN];
     int retval = MODE_ERR;
+    uint16_t prev_speed;
 
     zero_rundata( &rundata );
-    gpio_set_irq_enabled_with_callback( H1, GPIO_IRQ_EDGE_RISE|GPIO_IRQ_EDGE_FALL, 1, hall_irq);
-    gpio_set_irq_enabled_with_callback( H2, GPIO_IRQ_EDGE_RISE|GPIO_IRQ_EDGE_FALL, 1, hall_irq);
-    gpio_set_irq_enabled_with_callback( H3, GPIO_IRQ_EDGE_RISE|GPIO_IRQ_EDGE_FALL, 1, hall_irq);
 
     while(run)
     {
-        if( rundata.dt )
+        if( prev_speed != rundata.speed )
         {
-            send_reg_16( REG_DT, rundata.dt );
-            rundata.dt = 0;
+            send_reg_16( REG_SPEED, rundata.speed );
+            prev_speed = rundata.speed;
         }
         sleep_ms(10);
 
@@ -54,6 +52,8 @@ int irq_work()
         {
             case CMD_STOP:
             {
+                irq_set_enabled(IO_IRQ_BANK0, 0);
+                set_pwm_all( 0, 0);
                 rundata.pwm_h = 0;
                 rundata.pwm_l = 0;
                 send_reg_16( REG_PWM_H, rundata.pwm_h);
@@ -63,7 +63,6 @@ int irq_work()
 
             case CMD_START:
             {
-                irq_set_enabled(IO_IRQ_BANK0, 0);
                 set_pwm_all( rundata.pwm_l, 0);
                 sleep_ms(50);
                 set_pwm_all( 0, 0);
@@ -78,9 +77,6 @@ int irq_work()
                 set_pwm_all( rundata.pwm_l, 0);
                 rundata.pwm_l = 0;
                 rundata.pwm_h = 0;
-                while( rundata.dt < 0xFFFF );
-                set_pwm_all( 0, 0);
-                irq_set_enabled(IO_IRQ_BANK0, 1);
                 break;
             }
 
@@ -125,7 +121,7 @@ int sync_rotation()
 
             if( state == 0 ) // co obrot
             {
-                send_reg_16( REG_DT, time_us_32() - t );
+                send_reg_16( REG_SPEED, (uint32_t)1e7/(time_us_32() - t) );
                 t = time_us_32();
             }
 
@@ -319,7 +315,7 @@ void set_out_state( int step, uint16_t pwm_l, uint16_t pwm_h )
     pwm_set_both_levels(PH_C, ctab_cl[step]*pwm_h, ctab_ch[step]*pwm_l);
 }
 
-void rotate_stupid( volatile rt_data* rundata, int state)
+void rotate_stupid( volatile rt_data* data, int state)
 {
     int prev_state = 255, step = 0;
 
@@ -334,23 +330,23 @@ void rotate_stupid( volatile rt_data* rundata, int state)
 
         if( ++step > 5 ) step = 0;
 
-        set_out_state( step, rundata->pwm_l, rundata->pwm_h );
+        set_out_state( step, data->pwm_l, data->pwm_h );
     }
     set_pwm_all( 0, 0);
 }
 
-void step( volatile rt_data* rundata )
+void step( volatile rt_data* data )
 {
     static int step = 0;
 
-    step += ( rundata->dir == FWD ? -1 : 1 );
+    step += ( data->dir == FWD ? -1 : 1 );
     if( step > 5 ) step = 0;
     if( step < 0 ) step = 5;
 
     putchar_raw(REG_C_STATE);
     putchar_raw( step);
 
-    set_out_state( step, rundata->pwm_l, rundata->pwm_h );
+    set_out_state( step, data->pwm_l, data->pwm_h );
     sleep_ms(100);
     set_pwm_all( 0, 0);
 }
@@ -373,13 +369,21 @@ void bridge_init()
     pwm_set_enabled(PH_A, true);
     pwm_set_enabled(PH_B, true);
     pwm_set_enabled(PH_C, true);
+
+    gpio_init_mask(  H_ALL );
+    gpio_set_dir_in_masked( H_ALL );
+
+    gpio_set_irq_enabled_with_callback( H1, GPIO_IRQ_EDGE_RISE|GPIO_IRQ_EDGE_FALL, 1, hall_irq);
+    gpio_set_irq_enabled_with_callback( H2, GPIO_IRQ_EDGE_RISE|GPIO_IRQ_EDGE_FALL, 1, hall_irq);
+    gpio_set_irq_enabled_with_callback( H3, GPIO_IRQ_EDGE_RISE|GPIO_IRQ_EDGE_FALL, 1, hall_irq);
+    irq_set_enabled(IO_IRQ_BANK0, 0);
 }
 
-void zero_rundata( volatile rt_data* rundata)
+void zero_rundata( volatile rt_data* data)
 {
-    rundata->pwm_l = 0;
-    rundata->pwm_h = 0;
-    rundata->pwm_r = 0;
-    rundata->dir = FWD;
-    rundata->dt = 0;
+    data->pwm_l = 0;
+    data->pwm_h = 0;
+    data->pwm_r = 0;
+    data->dir = FWD;
+    data->speed = 0;
 }
