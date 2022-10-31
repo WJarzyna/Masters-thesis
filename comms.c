@@ -38,7 +38,7 @@ void pc_control()
             }
 
             case MODE_MAN_STEP: mode = manual_step(); break;
-            case MODE_SYNC_POLL: mode = sync_rotation(); break;
+            case MODE_SPEED_CTL: mode = speed_ctrl(); break;
             case MODE_SYNC_IRQ: mode = irq_work(); break;
             case MODE_VECT:
             {

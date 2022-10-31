@@ -8,10 +8,11 @@
 #include <pico/stdlib.h>
 #include "hardware/irq.h"
 #include "comms.h"
+#include "pid.h"
 
 typedef struct
 {
-    uint16_t pwm_l, pwm_h, pwm_r, dir, speed;
+    uint16_t pwm_l, pwm_h, pwm_r, dir, speed, setpoint;
 }rt_data;
 
 /*
@@ -70,5 +71,6 @@ void step( volatile rt_data* rundata );
 void hall_irq( uint gpio, uint32_t events );
 int irq_work();
 void zero_rundata( volatile rt_data* rundata);
+int speed_ctrl();
 
 #endif //INVERTER_BRIDGE_H

@@ -12,7 +12,7 @@
 
 #define LED 25
 
-enum Modes{ MODE_IDLE, MODE_SYNC_POLL, MODE_SYNC_IRQ, MODE_VECT, MODE_MAN_STEP, MODE_ERR};
+enum Modes{ MODE_IDLE, MODE_SPEED_CTL, MODE_SYNC_IRQ, MODE_VECT, MODE_MAN_STEP, MODE_ERR};
 enum Regs{ REG_MODE, REG_PWM_L, REG_PWM_H, REG_PWM_R, REG_DIR, REG_STATE, REG_SPEED, REG_C_STATE};
 enum Cmds{ CMD_EXIT, CMD_STOP, CMD_BRAKE, CMD_WREG, CMD_RREG, CMD_STEP, CMD_START};
 enum Errors{ ERR_NONE, ERR_TOUT, ERR_OC, ERR_OV, ERR_INV_CMD, ERR_NOT_IMPL};
@@ -21,5 +21,6 @@ extern int sync_rotation();
 extern int manual_step();
 extern int irq_work();
 void pc_control();
+extern int speed_ctrl();
 
 #endif //INVERTER_COMMS_H

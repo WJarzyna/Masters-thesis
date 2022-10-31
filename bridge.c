@@ -92,6 +92,74 @@ int irq_work()
     return retval;
 }
 
+int speed_ctrl()
+{
+    int run = 1;
+    int rx[MAX_RX_LEN];
+    int retval = MODE_ERR;
+    uint16_t prev_speed;
+    pid_i spid;
+
+    zero_rundata( &rundata );
+    pid_init( &spid, 60000, 60000, 0);
+    pid_tune( &spid, 100, 1, 0); //blizej prawdy, powoli zmienne obciazenia kompensuje
+
+    while(run)
+    {
+        if( prev_speed != rundata.speed )
+        {
+            send_reg_16( REG_SPEED, rundata.speed );
+            prev_speed = rundata.speed;
+        }
+
+        rundata.pwm_l = pid_calc( &spid, (int32_t)rundata.setpoint, (int32_t)rundata.speed);
+        send_reg_16( REG_PWM_L, rundata.pwm_l);
+        sleep_ms(10);
+
+        rx_data( rx, 0);
+
+        switch (rx[0])
+        {
+            case CMD_STOP:
+            {
+                irq_set_enabled(IO_IRQ_BANK0, 0);
+                set_pwm_all( 0, 0);
+                rundata.pwm_h = 0;
+                send_reg_16( REG_PWM_H, rundata.pwm_h);
+                send_reg_16( REG_PWM_L, rundata.pwm_l);
+                break;
+            }
+
+            case CMD_START:
+            {
+                set_pwm_all( 10000, 0);
+                sleep_ms(50);
+                set_pwm_all( 0, 0);
+                irq_set_enabled(IO_IRQ_BANK0, 1);
+                hall_irq( 0, 0);
+                break;
+            }
+
+            case CMD_BRAKE:
+            {
+                irq_set_enabled(IO_IRQ_BANK0, 0);
+                set_pwm_all( rundata.pwm_l, 0);
+                rundata.pwm_h = 0;
+                break;
+            }
+
+            case CMD_WREG: retval = parse_wreg( &run, &rundata, rx ); break;
+            case CMD_EXIT: run = 0; retval = MODE_IDLE; break;
+            case PICO_ERROR_TIMEOUT: break;
+            default: run = 0; retval = MODE_ERR;
+        }
+    }
+    irq_set_enabled(IO_IRQ_BANK0, 0);
+    set_pwm_all( 0, 0);
+
+    return retval;
+}
+
 int sync_rotation()
 {
     const int trtab[8] = TRTAB;
@@ -287,12 +355,13 @@ int parse_wreg( int* run, volatile rt_data* data, const int rx[] )
             send_reg_16(REG_PWM_L, data->pwm_l);
             break;
         }
-//                    case REG_PWM_R:
-//                    {
-//                        data->pwm_h = (rx[2] << 8) + rx[3];
-//                        send_reg_16( REG_PWM_R, data->pwm_r);
-//                        break;
-//                    }
+        case REG_PWM_R:
+        {
+            data->setpoint = (rx[2] << 8) + rx[3];
+            data->setpoint /= 25;
+            send_reg_16( REG_PWM_R, data->setpoint);
+            break;
+        }
         default: *run = 0; return MODE_ERR;
     }
 
