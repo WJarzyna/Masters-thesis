@@ -28,8 +28,8 @@ int32_t pid_calc( pid_i* pid, int32_t u, int32_t q )
     dt = time_us_32() - pid->t;
     pid->t = time_us_32();
 
-    i = e * (dt/1000);
-    pid->i_sum = LIMIT(pid->i_sum+i, -pid->i_limit, pid->i_limit);
+    i = e * (dt/10000);
+    pid->i_sum = LIMIT( (pid->i_sum)+i, -(pid->i_limit), pid->i_limit);
 
     d = (de*1000)/dt;
 

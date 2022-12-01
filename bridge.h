@@ -58,7 +58,6 @@ typedef struct
 
 #define PWM_MAX 60000
 
-int sync_rotation();
 void bridge_init();
 int manual_step();
 void set_pwm_all( uint16_t pwm_l, uint16_t pwm_h);
@@ -69,8 +68,8 @@ void set_out_state( int step, uint16_t pwm_l, uint16_t pwm_h );
 void rotate_stupid( volatile rt_data* rundata, int state);
 void step( volatile rt_data* rundata );
 void hall_irq( uint gpio, uint32_t events );
-int irq_work();
+//int irq_work();
 void zero_rundata( volatile rt_data* rundata);
-int speed_ctrl();
+int speed_ctrl( int pid );
 
 #endif //INVERTER_BRIDGE_H

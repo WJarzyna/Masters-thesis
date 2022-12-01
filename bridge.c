@@ -28,71 +28,7 @@ void hall_irq( uint gpio, uint32_t events )
     set_out_state( step, rundata.pwm_l, rundata.pwm_h );
 }
 
-int irq_work()
-{
-    int run = 1;
-    int rx[MAX_RX_LEN];
-    int retval = MODE_ERR;
-    uint16_t prev_speed;
-
-    zero_rundata( &rundata );
-
-    while(run)
-    {
-        if( prev_speed != rundata.speed )
-        {
-            send_reg_16( REG_SPEED, rundata.speed );
-            prev_speed = rundata.speed;
-        }
-        sleep_ms(10);
-
-        rx_data( rx, 0);
-
-        switch (rx[0])
-        {
-            case CMD_STOP:
-            {
-                irq_set_enabled(IO_IRQ_BANK0, 0);
-                set_pwm_all( 0, 0);
-                rundata.pwm_h = 0;
-                rundata.pwm_l = 0;
-                send_reg_16( REG_PWM_H, rundata.pwm_h);
-                send_reg_16( REG_PWM_L, rundata.pwm_l);
-                break;
-            }
-
-            case CMD_START:
-            {
-                set_pwm_all( rundata.pwm_l, 0);
-                sleep_ms(50);
-                set_pwm_all( 0, 0);
-                irq_set_enabled(IO_IRQ_BANK0, 1);
-                hall_irq( 0, 0);
-                break;
-            }
-
-            case CMD_BRAKE:
-            {
-                irq_set_enabled(IO_IRQ_BANK0, 0);
-                set_pwm_all( rundata.pwm_l, 0);
-                rundata.pwm_l = 0;
-                rundata.pwm_h = 0;
-                break;
-            }
-
-            case CMD_WREG: retval = parse_wreg( &run, &rundata, rx ); break;
-            case CMD_EXIT: run = 0; retval = MODE_IDLE; break;
-            case PICO_ERROR_TIMEOUT: break;
-            default: run = 0; retval = MODE_ERR;
-        }
-    }
-    irq_set_enabled(IO_IRQ_BANK0, 0);
-    set_pwm_all( 0, 0);
-
-    return retval;
-}
-
-int speed_ctrl()
+int speed_ctrl( int pid )
 {
     int run = 1;
     int rx[MAX_RX_LEN];
@@ -101,8 +37,8 @@ int speed_ctrl()
     pid_i spid;
 
     zero_rundata( &rundata );
-    pid_init( &spid, 60000, 60000, 0);
-    pid_tune( &spid, 100, 1, 0); //blizej prawdy, powoli zmienne obciazenia kompensuje
+    pid_init( &spid, 40000, 60000, 0);
+    pid_tune( &spid, 100, 2, 0); //blizej prawdy, powoli zmienne obciazenia kompensuje
 
     while(run)
     {
@@ -112,8 +48,12 @@ int speed_ctrl()
             prev_speed = rundata.speed;
         }
 
-        rundata.pwm_l = pid_calc( &spid, (int32_t)rundata.setpoint, (int32_t)rundata.speed);
-        send_reg_16( REG_PWM_L, rundata.pwm_l);
+        if( pid )
+        {
+            rundata.pwm_l = pid_calc(&spid, (int32_t) rundata.setpoint, (int32_t) rundata.speed);
+            send_reg_16(REG_PWM_L, rundata.pwm_l);
+        }
+
         sleep_ms(10);
 
         rx_data( rx, 0);
@@ -125,6 +65,8 @@ int speed_ctrl()
                 irq_set_enabled(IO_IRQ_BANK0, 0);
                 set_pwm_all( 0, 0);
                 rundata.pwm_h = 0;
+                rundata.pwm_l = 0;
+                rundata.setpoint = 0;
                 send_reg_16( REG_PWM_H, rundata.pwm_h);
                 send_reg_16( REG_PWM_L, rundata.pwm_l);
                 break;
@@ -145,6 +87,8 @@ int speed_ctrl()
                 irq_set_enabled(IO_IRQ_BANK0, 0);
                 set_pwm_all( rundata.pwm_l, 0);
                 rundata.pwm_h = 0;
+                rundata.pwm_l = 0;
+                rundata.setpoint = 0;
                 break;
             }
 
@@ -155,97 +99,6 @@ int speed_ctrl()
         }
     }
     irq_set_enabled(IO_IRQ_BANK0, 0);
-    set_pwm_all( 0, 0);
-
-    return retval;
-}
-
-int sync_rotation()
-{
-    const int trtab[8] = TRTAB;
-    int prev_state = 0, state = 0, run = 1;
-    uint32_t t = time_us_32();
-    int rx[MAX_RX_LEN];
-    int retval = MODE_ERR, advance = 0, step;
-
-    zero_rundata( &rundata );
-
-    while(run)
-    {
-        while( state == prev_state )
-        {
-            state = ( gpio_get_all() & (H_ALL) ) >> 16;
-            rx[0] = getchar_timeout_us(0);
-            if( rx[0] != PICO_ERROR_TIMEOUT )
-            {
-                advance = 1;
-                break;
-            }
-        }
-
-        if( prev_state != state )
-        {
-            prev_state = state;
-
-            if( state == 0 ) // co obrot
-            {
-                send_reg_16( REG_SPEED, (uint32_t)1e7/(time_us_32() - t) );
-                t = time_us_32();
-            }
-
-            step = trtab[state] + ( rundata.dir == FWD ? -1 : 1 );
-            switch( step )
-            {
-                case 6: step = 0; break;
-                case -1: step = 5; break;
-                case 253:;
-                case 254:;
-                case 255: continue;
-                default: break;
-            }
-
-            set_out_state( step, rundata.pwm_l, rundata.pwm_h );
-        }
-
-        rx_data( rx, advance);
-        advance = 0;
-
-        switch (rx[0])
-        {
-            case CMD_STOP:
-            {
-                rundata.pwm_h = 0;
-                rundata.pwm_l = 0;
-                send_reg_16( REG_PWM_H, rundata.pwm_h);
-                send_reg_16( REG_PWM_L, rundata.pwm_l);
-                break;
-            }
-
-            case CMD_START:
-            {
-                set_pwm_all( rundata.pwm_l, 0);
-                sleep_ms(50);
-                prev_state = 255;
-                set_pwm_all( 0, 0);
-                break;
-            }
-
-            case CMD_BRAKE:
-            {
-                set_pwm_all( rundata.pwm_l, 0);
-                rundata.pwm_l = 0;
-                rundata.pwm_h = 0;
-                busy_wait_ms(2000);
-                set_pwm_all( 0, 0);
-                break;
-            }
-
-            case CMD_WREG: retval = parse_wreg( &run, &rundata, rx ); break;
-            case CMD_EXIT: run = 0; retval = MODE_IDLE; break;
-            case PICO_ERROR_TIMEOUT: break;
-            default: run = 0; retval = MODE_ERR;
-        }
-    }
     set_pwm_all( 0, 0);
 
     return retval;

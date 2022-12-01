@@ -17,10 +17,9 @@ enum Regs{ REG_MODE, REG_PWM_L, REG_PWM_H, REG_PWM_R, REG_DIR, REG_STATE, REG_SP
 enum Cmds{ CMD_EXIT, CMD_STOP, CMD_BRAKE, CMD_WREG, CMD_RREG, CMD_STEP, CMD_START};
 enum Errors{ ERR_NONE, ERR_TOUT, ERR_OC, ERR_OV, ERR_INV_CMD, ERR_NOT_IMPL};
 
-extern int sync_rotation();
 extern int manual_step();
-extern int irq_work();
+//extern int irq_work();
 void pc_control();
-extern int speed_ctrl();
+extern int speed_ctrl( int pid );
 
 #endif //INVERTER_COMMS_H
