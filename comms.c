@@ -4,15 +4,9 @@ void pc_control()
 {
     int mode = MODE_IDLE;
     int rx[MAX_RX_LEN];
-//    int i = 0;
 
     while(1)
     {
-//        i = -1;
-//        do
-//        {
-//            rx[++i] = getchar_timeout_us(0);
-//        } while (i < MAX_RX_LEN && rx[i] != PICO_ERROR_TIMEOUT );
         rx_data( rx, 0);
 
         switch (rx[0])
@@ -23,11 +17,9 @@ void pc_control()
                 break;
             }
             case PICO_ERROR_TIMEOUT: break;
-            default: mode = MODE_ERR;
+            default: send_reg_8(INFO_ERR, ERR_INV_CMD); mode = MODE_ERR;
         }
 
-//        putchar_raw(REG_MODE);
-//        putchar_raw(mode);
         send_reg_8(REG_MODE, mode);
 
         switch( mode )
@@ -70,15 +62,13 @@ void rx_data( int rx[], int advance )
     while( i < MAX_RX_LEN && rx[i] != PICO_ERROR_TIMEOUT );
 }
 
-int parse_wreg( int* run, volatile rt_data* data, const int rx[] )
+int parse_wreg( int* run, volatile rt_data* data, volatile pid_i* pid, const int rx[] )
 {
     switch (rx[1])
     {
         case REG_DIR:
         {
             data->dir = rx[2];
-//            putchar_raw(REG_DIR);
-//            putchar_raw(data->dir);
             send_reg_8(REG_DIR, data->dir);
             break;
         }
@@ -94,13 +84,41 @@ int parse_wreg( int* run, volatile rt_data* data, const int rx[] )
             send_reg_16(REG_PWM_L, data->pwm_l);
             break;
         }
+
         case REG_PWM_R:
         {
-            data->setpoint = (rx[2] << 8) + rx[3];
-            data->setpoint /= 25;
-            send_reg_16( REG_PWM_R, data->setpoint);
+            data->pwm_r = (rx[2] << 8) + rx[3];
+            send_reg_16(REG_PWM_R, data->pwm_r);
             break;
         }
+        case REG_SET_SPEED:
+        {
+            data->set_speed = (rx[2] << 8) + rx[3];
+            send_reg_16( REG_SET_SPEED, data->set_speed);
+            break;
+        }
+
+        case REG_PID_P:
+        {
+            pid_tune( pid, rx[2], pid->ki, pid->kd);
+            send_reg_8( REG_PID_P, pid->kp);
+            break;
+        }
+
+        case REG_PID_I:
+        {
+            pid_tune( pid, pid->kp, rx[2], pid->kd);
+            send_reg_8( REG_PID_I, pid->ki);
+            break;
+        }
+
+        case REG_PID_D:
+        {
+            pid_tune( pid, pid->kp, pid->ki, rx[2]);
+            send_reg_8( REG_PID_D, pid->kd);
+            break;
+        }
+
         default: *run = 0; return MODE_ERR;
     }
 
@@ -114,6 +132,7 @@ void zero_rundata( volatile rt_data* data)
     data->pwm_r = 0;
     data->dir = FWD;
     data->speed = 0;
+    data->set_speed = 0;
     data->dt = 0xFFFF;
     data->alpha = 0;
     data->t = 0;

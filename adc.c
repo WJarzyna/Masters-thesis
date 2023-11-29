@@ -2,6 +2,38 @@
 
 void adc_dma()
 {
+    adc_init_dma();
+
+    for(;;)
+    {
+        gpio_xor_mask((1<<LED));
+        printf("%u %u %u %u %s\n", adc_raw[0], adc_raw[1], adc_raw[2], adc_raw[3],\
+        dma_channel_is_busy(dma_chan)?"DMA Busy":"DMA Idle");
+
+        adc_dma_keepalive();
+        //dma_channel_set_trans_count(dma_chan, 0xFFFF, false);
+        sleep_ms(100);
+    }
+}
+
+void adc_test()
+{
+    uint16_t result;
+
+    adc_init();
+    adc_gpio_init(28);
+    adc_select_input(2);
+
+    for(;;)
+    {
+        result = adc_read();
+        printf("%u", result);
+        sleep_ms(100);
+    }
+}
+
+void adc_init_dma()
+{
     // Init GPIO for analogue use: hi-Z, no pulls, disable digital input buffer.
     adc_gpio_init(29);
     adc_gpio_init(28);
@@ -39,39 +71,17 @@ void adc_dma()
                           true );           // start immediately
 
     adc_run(true);
-
-    for(;;)
-    {
-        gpio_xor_mask((1<<LED));
-        printf("%u %u %u %u %s\n", adc_raw[0], adc_raw[1], adc_raw[2], adc_raw[3],\
-        dma_channel_is_busy(dma_chan)?"DMA Busy":"DMA Idle");
-
-        if( !dma_channel_is_busy(dma_chan) )
-        {
-            puts("Restarting DMA & ADC");
-            adc_run(false);
-            adc_fifo_drain();
-            dma_channel_set_write_addr(dma_chan, adc_raw, true);
-            adc_select_input(0);
-            adc_run(true);
-        }
-        //dma_channel_set_trans_count(dma_chan, 0xFFFF, false);
-        sleep_ms(100);
-    }
 }
 
-void adc_test()
+void adc_dma_keepalive()
 {
-    uint16_t result;
-
-    adc_init();
-    adc_gpio_init(28);
-    adc_select_input(2);
-
-    for(;;)
+    if( !dma_channel_is_busy(dma_chan) )
     {
-        result = adc_read();
-        printf("%u", result);
-        sleep_ms(100);
+//        puts("Restarting DMA & ADC");
+        adc_run(false);
+        adc_fifo_drain();
+        dma_channel_set_write_addr(dma_chan, adc_raw, true);
+        adc_select_input(0);
+        adc_run(true);
     }
 }

@@ -37,7 +37,7 @@ int vect_ctrl()
                 set_pwm_all( 0, 0);
                 rundata.pwm_h = 0;
                 rundata.pwm_l = 0;
-                rundata.setpoint = 0;
+                rundata.set_speed = 0;
                 send_reg_16( REG_PWM_H, rundata.pwm_h);
                 send_reg_16( REG_PWM_L, rundata.pwm_l);
                 break;
@@ -59,7 +59,7 @@ int vect_ctrl()
                 //set_pwm_all( rundata.pwm_l, 0);
                 rundata.pwm_h = 0;
                 rundata.pwm_l = 0;
-                rundata.setpoint = 0;
+                rundata.set_speed = 0;
                 break;
             }
 
@@ -84,7 +84,7 @@ int speed_ctrl( int pid )
     pid_i spid;
 
     zero_rundata( &rundata );
-    pid_init( &spid, 40000, 60000, 0);
+    pid_init( &spid, 20000, 60000, 0);
     pid_tune( &spid, 100, 2, 0); //blizej prawdy, powoli zmienne obciazenia kompensuje
 
     while(run)
@@ -97,7 +97,7 @@ int speed_ctrl( int pid )
 
         if( pid )
         {
-            rundata.pwm_l = pid_calc(&spid, (int32_t) rundata.setpoint, (int32_t) rundata.speed);
+            rundata.pwm_l = pid_calc(&spid, (int32_t) rundata.set_speed, (int32_t) rundata.speed);
             send_reg_16(REG_PWM_L, rundata.pwm_l);
         }
 
@@ -113,9 +113,12 @@ int speed_ctrl( int pid )
                 set_pwm_all( 0, 0);
                 rundata.pwm_h = 0;
                 rundata.pwm_l = 0;
-                rundata.setpoint = 0;
+                rundata.pwm_r = 0;
+                rundata.set_speed = 0;
                 send_reg_16( REG_PWM_H, rundata.pwm_h);
                 send_reg_16( REG_PWM_L, rundata.pwm_l);
+                send_reg_16( REG_PWM_R, rundata.pwm_l);
+                send_reg_16( REG_SET_SPEED, rundata.set_speed);
                 break;
             }
 
@@ -135,11 +138,12 @@ int speed_ctrl( int pid )
                 set_pwm_all( rundata.pwm_l, 0);
                 rundata.pwm_h = 0;
                 rundata.pwm_l = 0;
-                rundata.setpoint = 0;
+                rundata.set_speed = 0;
+                send_reg_16( REG_SET_SPEED, rundata.set_speed);
                 break;
             }
 
-            case CMD_WREG: retval = parse_wreg( &run, &rundata, rx ); break;
+            case CMD_WREG: retval = parse_wreg( &run, &rundata, &spid, rx ); break;
             case CMD_EXIT: run = 0; retval = MODE_IDLE; break;
             case PICO_ERROR_TIMEOUT: break;
             default: run = 0; retval = MODE_ERR;

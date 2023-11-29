@@ -49,8 +49,6 @@ int manual_step()
 
         if( prev_state != state )
         {
-//            putchar_raw(REG_STATE);
-//            putchar_raw( state);
             send_reg_8(REG_STATE, state);
             prev_state = state;
         }
@@ -79,7 +77,7 @@ int manual_step()
                 break;
             }
 
-            case CMD_WREG: retval = parse_wreg( &run, &rundata, rx ); break;
+            case CMD_WREG: retval = parse_wreg( &run, &rundata, NULL, rx ); break;
             case CMD_STEP: step( &rundata); break;
 
             case CMD_EXIT: run = 0; retval = MODE_IDLE; break;
@@ -143,8 +141,6 @@ void step( volatile rt_data* data )
     if( step > 5 ) step = 0;
     if( step < 0 ) step = 5;
 
-//    putchar_raw(REG_C_STATE);
-//    putchar_raw( step);
     send_reg_8(REG_C_STATE, step);
 
     set_out_state( step, data->pwm_l, data->pwm_h );

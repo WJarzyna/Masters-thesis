@@ -10,7 +10,7 @@ void pid_init( pid_i* pid, int32_t i_limit, int32_t o_max, int32_t o_min )
     pid->o_min = o_min;
 }
 
-void pid_tune( pid_i* pid, int32_t kp, int32_t ki, int32_t kd )
+void pid_tune( volatile pid_i* pid, int32_t kp, int32_t ki, int32_t kd )
 {
     pid->kp = kp;
     pid->ki = ki;

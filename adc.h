@@ -12,5 +12,7 @@ uint dma_chan;
 
 void adc_test();
 void adc_dma();
+void adc_init_dma();
+void adc_dma_keepalive();
 
 #endif //INVERTER_ADC_H
