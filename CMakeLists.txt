@@ -6,7 +6,7 @@ set(PICO_SDK_PATH /home/kon/Documents/c/RP2040/pico-sdk)
 include(pico_sdk_import.cmake)
 
 project(inverter C CXX ASM )
-add_executable(inverter main.c bridge.h bridge.c comms.c comms.h adc.c adc.h pid.c pid.h)
+add_executable(inverter main.c bridge.h bridge.c comms.c comms.h adc.c adc.h pid.c pid.h control.c control.h)
 pico_sdk_init()
 
 target_link_libraries(inverter
