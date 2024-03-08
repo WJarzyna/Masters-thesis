@@ -2,26 +2,15 @@
 #define INVERTER_BRIDGE_H
 
 #include <hardware/pwm.h>
-#include <pico/stdio.h>
-//#include <pico/printf.h>
 #include <hardware/gpio.h>
-#include <pico/stdlib.h>
 #include "hardware/irq.h"
 #include "comms.h"
+#include "adc.h"
 
-/*
- * sterowanie po lewej
- * 0-5 fazy (od usb 0, 1, GND, 2-5 braz-czerw-masa-nieb-ziel-nieb-szary
- * pwm na dole
- * 14 rotor PWM7A
- * 15 main PWM7B
- * sensory 16, 17, 18 (od dolu od prawej)
- */
-
+/* INZ
 #define PH_A 0
 #define PH_B 1
 #define PH_C 2
-
 
 #define A_L 0
 #define A_H 1
@@ -29,6 +18,23 @@
 #define B_H 3
 #define C_L 4
 #define C_H 5
+ */
+
+#define PWR_EN 22
+
+#define PH_ROTOR 7
+#define PWM_ROTOR 15
+
+#define PH_A 2
+#define PH_B 1
+#define PH_C 0
+
+#define A_L 20
+#define A_H 21
+#define B_L 18
+#define B_H 19
+#define C_L 16
+#define C_H 17
 
 #define CTAB_AH { 0, 0, 0, 1, 1, 0 }
 #define CTAB_AL { 1, 1, 0, 0, 0, 0 }
@@ -37,9 +43,15 @@
 #define CTAB_CH { 0, 1, 1, 0, 0, 0 }
 #define CTAB_CL { 0, 0, 0, 0, 1, 1 }
 
+/* INZ
 #define H1 16 //red
 #define H2 17 //green
 #define H3 18 //violet
+*/
+
+#define H1 0 //red
+#define H2 1 //green
+#define H3 2 //violet
 
 #define H_ALL (1<<H1)|(1<<H2)|(1<<H3)
 
@@ -52,8 +64,10 @@
 #define PWM_MAX 60000
 
 void bridge_init();
+void mainboard_init();
+void hall_init();
 int manual_step();
-void set_pwm_all( uint16_t pwm_l, uint16_t pwm_h);
+void set_pwm_all_ph(uint16_t pwm_l, uint16_t pwm_h);
 void set_out_state( int step, uint16_t pwm_l, uint16_t pwm_h );
 void rotate_stupid( volatile rt_data* rundata, int state);
 void step( volatile rt_data* rundata );

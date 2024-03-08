@@ -6,13 +6,13 @@ void hall_irq( uint gpio, uint32_t events )
 {
     static uint32_t t6;
     static const int trtab[8] = TRTAB;
-    static const int alpha_tab[8] = ALPHA_TAB;
-    uint32_t state = ( gpio_get_all() & (H_ALL) ) >> 16;
+//    static const int alpha_tab[8] = ALPHA_TAB;
+    uint32_t state = ( gpio_get_all() & (H_ALL) );// >> 16;
     int step = trtab[state] + ( rundata.dir == FWD ? -1 : 1 );
 
-    rundata.dt = time_us_32() - rundata.t;
-    rundata.t = time_us_32();
-    rundata.alpha = alpha_tab[state];
+//    rundata.dt = time_us_32() - rundata.t;
+//    rundata.t = time_us_32();
+//    rundata.alpha = alpha_tab[state];
 
     switch( step )
     {
@@ -38,14 +38,15 @@ void hall_irq( uint gpio, uint32_t events )
 int manual_step()
 {
     int prev_state = 0, state = 0, run = 1;
-    int rx[MAX_RX_LEN];
+    uint8_t rx[MAX_RX_LEN];
     int retval = MODE_ERR;
 
     zero_rundata( &rundata );
+    gpio_put(PWR_EN, 1);
 
     while(run)
     {
-        state = ( gpio_get_all() & (H_ALL) ) >> 16;
+        state = ( gpio_get_all() & (H_ALL) );
 
         if( prev_state != state )
         {
@@ -53,7 +54,7 @@ int manual_step()
             prev_state = state;
         }
 
-        rx_data( rx, 0 );
+        if( !usb_cdc_read(rx, MAX_RX_LEN) ) continue;
 
         switch (rx[0])
         {
@@ -61,6 +62,7 @@ int manual_step()
             {
                 rundata.pwm_h = 0;
                 rundata.pwm_l = 0;
+                rundata.pwm_r = 0;
                 send_reg_16( REG_PWM_H, rundata.pwm_h);
                 send_reg_16( REG_PWM_L, rundata.pwm_l);
                 break;
@@ -69,33 +71,39 @@ int manual_step()
             case CMD_START: rotate_stupid( &rundata, state); break;
             case CMD_BRAKE:
             {
-                set_pwm_all( rundata.pwm_l, 0);
+                set_pwm_all_ph(rundata.pwm_l, 0);
                 rundata.pwm_l = 0;
                 rundata.pwm_h = 0;
+                rundata.pwm_r = 0;
                 busy_wait_ms(2000);
-                set_pwm_all( 0, 0);
+                set_pwm_all_ph(0, 0);
+                pwm_set_chan_level( PH_ROTOR, PWM_CHAN_B, 0);
                 break;
             }
 
             case CMD_WREG: retval = parse_wreg( &run, &rundata, NULL, rx ); break;
             case CMD_STEP: step( &rundata); break;
-
             case CMD_EXIT: run = 0; retval = MODE_IDLE; break;
-            case PICO_ERROR_TIMEOUT: break;
             default: run = 0; retval = MODE_ERR;
         }
     }
-    set_pwm_all( 0, 0);
+    set_pwm_all_ph(0, 0);
+    pwm_set_chan_level( PH_ROTOR, PWM_CHAN_B, 0);
+    gpio_put(PWR_EN, 0);
 
     return retval;
 }
 
-void set_pwm_all( uint16_t pwm_l, uint16_t pwm_h)
+
+
+void set_pwm_all_ph(uint16_t pwm_l, uint16_t pwm_h)
 {
     pwm_set_both_levels(PH_A, pwm_l, pwm_h);
     pwm_set_both_levels(PH_B, pwm_l, pwm_h);
     pwm_set_both_levels(PH_C, pwm_l, pwm_h);
 }
+
+
 
 void set_out_state( int step, uint16_t pwm_l, uint16_t pwm_h )
 {
@@ -106,23 +114,26 @@ void set_out_state( int step, uint16_t pwm_l, uint16_t pwm_h )
     static const uint ctab_cl[6] = CTAB_CL;
     static const uint ctab_ch[6] = CTAB_CH;
 
-    set_pwm_all( 0, 0);
+    set_pwm_all_ph(0, 0);
     busy_wait_us_32( DEAD_TIME);
     pwm_set_both_levels(PH_A, ctab_al[step]*pwm_h, ctab_ah[step]*pwm_l);
     pwm_set_both_levels(PH_B, ctab_bl[step]*pwm_h, ctab_bh[step]*pwm_l);
     pwm_set_both_levels(PH_C, ctab_cl[step]*pwm_h, ctab_ch[step]*pwm_l);
 }
 
+
+
 void rotate_stupid( volatile rt_data* data, int state)
 {
     int prev_state = 255, step = 0;
+    uint8_t dummy;
 
     for( unsigned i = 0; i < 60; ++i)
     {
         while( state == prev_state )
         {
             state = ( gpio_get_all() & (H_ALL) ) >> 16;
-            if( getchar_timeout_us(0) != PICO_ERROR_TIMEOUT ) return;
+            if( usb_cdc_read(&dummy, 1) ) return;
         }
         prev_state = state;
 
@@ -130,8 +141,10 @@ void rotate_stupid( volatile rt_data* data, int state)
 
         set_out_state( step, data->pwm_l, data->pwm_h );
     }
-    set_pwm_all( 0, 0);
+    set_pwm_all_ph(0, 0);
 }
+
+
 
 void step( volatile rt_data* data )
 {
@@ -145,8 +158,10 @@ void step( volatile rt_data* data )
 
     set_out_state( step, data->pwm_l, data->pwm_h );
     sleep_ms(100);
-    set_pwm_all( 0, 0);
+    set_pwm_all_ph(0, 0);
 }
+
+
 
 void bridge_init()
 {
@@ -161,12 +176,30 @@ void bridge_init()
     pwm_set_wrap(PH_B, PWM_MAX);
     pwm_set_wrap(PH_C, PWM_MAX);
 
-    set_pwm_all( 0, 0);
+    set_pwm_all_ph(0, 0);
 
     pwm_set_enabled(PH_A, true);
     pwm_set_enabled(PH_B, true);
     pwm_set_enabled(PH_C, true);
+}
 
+void mainboard_init()
+{
+    gpio_set_function( PWM_ROTOR, GPIO_FUNC_PWM);
+    pwm_set_wrap(PH_ROTOR, PWM_MAX/6);
+    pwm_set_chan_level( PH_ROTOR, PWM_CHAN_B, 0);
+    pwm_set_enabled(PH_ROTOR, true);
+
+    gpio_init(PWR_EN);
+    gpio_put(PWR_EN, 0);
+    gpio_set_dir(PWR_EN, true);
+
+}
+
+
+
+void hall_init()
+{
     gpio_init_mask(  H_ALL );
     gpio_set_dir_in_masked( H_ALL );
 
@@ -176,9 +209,11 @@ void bridge_init()
     irq_set_enabled(IO_IRQ_BANK0, 0);
 }
 
+
+
 int sin_16( int angle )
 {
-    int values[180] = SIN_180;
+    static const int values[180] = SIN_180;
 
     angle %= 360;
     if( angle < 0 )

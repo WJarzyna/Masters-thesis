@@ -8,7 +8,7 @@
 typedef struct
 {
     int32_t kp, ki, kd;
-    uint32_t t;
+    uint32_t t_prev;
     int32_t i_sum, e_prev;
     int32_t i_limit, o_max, o_min;
 } pid_i;
